@@ -1,0 +1,81 @@
+{
+  "events": [
+    {
+      "event_id": "e1",
+      "agent_id": "C",
+      "turn_seq": 1,
+      "kind": "llm_sampling",
+      "inputs": "User: I want a refund on order #12345.",
+      "outputs": "Plan: retrieve order, check refund POLICY: 30 days, compute amount, reply.",
+      "causal_parents": [],
+      "content_hash": "h1",
+      "timestamp_ns": 1000
+    },
+    {
+      "event_id": "e2",
+      "agent_id": "K",
+      "turn_seq": 1,
+      "kind": "tool_invocation",
+      "inputs": "lookup_order(#12345)",
+      "outputs": "Order #12345: purchased 10 days ago, total $49.99.",
+      "causal_parents": [
+        "e1"
+      ],
+      "content_hash": "h2",
+      "timestamp_ns": 2000
+    },
+    {
+      "event_id": "e3",
+      "agent_id": "T",
+      "turn_seq": 1,
+      "kind": "tool_invocation",
+      "inputs": "load_policy(refunds)",
+      "outputs": "POLICY: 30 days",
+      "causal_parents": [
+        "e1"
+      ],
+      "content_hash": "h3",
+      "timestamp_ns": 3000
+    },
+    {
+      "event_id": "e4",
+      "agent_id": "C",
+      "turn_seq": 2,
+      "kind": "llm_sampling",
+      "inputs": "Decision: Order is 10 days old. Applying POLICY: 30 days.",
+      "outputs": "Eligibility under POLICY: 30 days: ELIGIBLE.",
+      "causal_parents": [
+        "e2",
+        "e3"
+      ],
+      "content_hash": "h4",
+      "timestamp_ns": 4000
+    },
+    {
+      "event_id": "e5",
+      "agent_id": "B",
+      "turn_seq": 1,
+      "kind": "llm_sampling",
+      "inputs": "Compute refund: $49.99, Eligibility under POLICY: 30 days: ELIGIBLE.",
+      "outputs": "Refund authorized: $49.99 under POLICY: 30 days.",
+      "causal_parents": [
+        "e4"
+      ],
+      "content_hash": "h5",
+      "timestamp_ns": 5000
+    },
+    {
+      "event_id": "e6",
+      "agent_id": "R",
+      "turn_seq": 1,
+      "kind": "llm_sampling",
+      "inputs": "Compose reply: Refund authorized: $49.99 under POLICY: 30 days.",
+      "outputs": "Dear customer, your refund of $49.99 has been processed under POLICY: 30 days.",
+      "causal_parents": [
+        "e5"
+      ],
+      "content_hash": "h6",
+      "timestamp_ns": 6000
+    }
+  ]
+}
