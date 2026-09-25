@@ -1,0 +1,18 @@
+name: self-test
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          traces: example/traces
+          modify: example/modify.json
+          fail-on: never
