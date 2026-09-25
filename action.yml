@@ -1,0 +1,88 @@
+name: ConeReplay Regression Report
+description: Replay recorded agent traces against a proposed change and post the divergence report as a PR comment.
+author: gitdhillonai
+branding:
+  icon: git-branch
+  color: purple
+
+inputs:
+  traces:
+    description: A trace file, a directory of traces, or a glob. A single file runs `conereplay replay`; anything else runs `conereplay corpus`.
+    required: true
+  modify:
+    description: Path to the modification JSON (the proposed change).
+    required: true
+  report:
+    description: Path for the Markdown report.
+    required: false
+    default: conereplay-report.md
+  fail-on:
+    description: Fail the check when the outcome-change rate is above this threshold, e.g. `outcome-change:1%`. Use `never` to only report.
+    required: false
+    default: outcome-change:1%
+  comment:
+    description: Post (or update) the report as a comment on the pull request.
+    required: false
+    default: "true"
+  github-token:
+    description: Token used to post the PR comment. Needs `pull-requests: write`.
+    required: false
+    default: ${{ github.token }}
+  conereplay-version:
+    description: conereplay version to install from PyPI.
+    required: false
+    default: "0.1.1"
+  python-version:
+    description: Python version (3.11+).
+    required: false
+    default: "3.11"
+
+outputs:
+  report:
+    description: Path to the Markdown report.
+    value: ${{ steps.run.outputs.report }}
+  outcome-change-rate:
+    description: Share of replayed traces whose final outcome changed, in percent.
+    value: ${{ steps.run.outputs.rate }}
+  comment-url:
+    description: URL of the PR comment, when one was posted.
+    value: ${{ steps.comment.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install conereplay
+      shell: bash
+      run: python -m pip install --disable-pip-version-check -q "conereplay==${{ inputs.conereplay-version }}"
+
+    - name: Replay traces
+      id: run
+      shell: bash
+      env:
+        CR_TRACES: ${{ inputs.traces }}
+        CR_MODIFY: ${{ inputs.modify }}
+        CR_REPORT: ${{ inputs.report }}
+      run: bash "${{ github.action_path }}/scripts/run.sh"
+
+    - name: Post PR comment
+      id: comment
+      if: inputs.comment == 'true' && github.event.pull_request.number != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        CR_REPORT: ${{ inputs.report }}
+        CR_RATE: ${{ steps.run.outputs.rate }}
+        CR_PR: ${{ github.event.pull_request.number }}
+        CR_REPO: ${{ github.repository }}
+      run: bash "${{ github.action_path }}/scripts/comment.sh"
+
+    - name: Check threshold
+      shell: bash
+      env:
+        CR_RATE: ${{ steps.run.outputs.rate }}
+        CR_FAIL_ON: ${{ inputs.fail-on }}
+      run: bash "${{ github.action_path }}/scripts/gate.sh"
