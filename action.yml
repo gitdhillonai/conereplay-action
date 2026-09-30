@@ -31,7 +31,7 @@ inputs:
   conereplay-version:
     description: conereplay version to install from PyPI.
     required: false
-    default: "0.1.1"
+    default: "0.1.2"
   python-version:
     description: Python version (3.11+).
     required: false
