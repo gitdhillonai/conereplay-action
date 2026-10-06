@@ -26,7 +26,7 @@ The same workflow is in `examples/workflow.yml`.
 
 A single trace file runs `conereplay replay`. A directory or a glob runs `conereplay corpus`. The glob string is passed through to conereplay, which expands it. The report is posted as one PR comment. A later run on the same pull request updates that comment and removes older comments that carry the same hidden marker. The same report is appended to the job summary.
 
-The action creates a virtualenv with the runner's Python and installs `conereplay` with `pip` at the pinned `conereplay-version`. It does not download a shell script or a Python build. The runner must already provide Python 3.11 or newer (`python3.11` or `python3`). `actions/setup-python` is not used, because that action's archive contains symlinks and this repo's self-hosted runner cannot create them while extracting it.
+The action creates a virtualenv with the runner's Python and installs `conereplay` with `pip` at the pinned `conereplay-version`. It does not download a shell script or a Python build. The runner must already provide Python 3.11 or newer (`python3.11` or `python3`), plus `curl` and `jq` for the pull request comment. `actions/setup-python` is not used, because that action's archive contains symlinks and this repo's self-hosted runner cannot create them while extracting it.
 
 ## Permissions
 

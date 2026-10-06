@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Comment creation, update on re-run, duplicate removal, and fork-PR fallback.
+# The action talks to the GitHub API with curl. This mock is that curl.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,86 +30,90 @@ new_mock() {
     echo '[]' > "$state/comments.json"
   fi
   : > "$state/calls.log"
-  cat > "$state/bin/gh" << 'EOF'
+  cat > "$state/bin/curl" << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 state="${GH_MOCK_STATE:?}"
 comments="$state/comments.json"
 method="GET"
-jq_filter=""
+outfile=""
+datafile=""
 url=""
-input=""
 prev=""
 for arg in "$@"; do
-  if [ "$prev" = "--jq" ]; then
-    jq_filter="$arg"
-    prev=""
-    continue
-  fi
-  if [ "$prev" = "-X" ]; then
-    method="$arg"
-    prev=""
-    continue
-  fi
-  if [ "$prev" = "--input" ]; then
-    input="$arg"
+  if [ -n "$prev" ]; then
+    case "$prev" in
+      --output) outfile="$arg" ;;
+      --request) method="$arg" ;;
+      --data-binary) datafile="${arg#@}" ;;
+      --write-out|--header) ;;
+    esac
     prev=""
     continue
   fi
   case "$arg" in
-    --jq|-X|--input)
+    --output|--request|--data-binary|--write-out|--header)
       prev="$arg"
-      continue
       ;;
-    --paginate|api)
-      continue
+    --silent|--show-error)
       ;;
-    *)
+    http*)
       url="$arg"
       ;;
   esac
 done
-printf '%s %s\n' "$method" "$url" >> "$state/calls.log"
+path="${url#*://}"
+path="/${path#*/}"
+printf '%s %s\n' "$method" "$path" >> "$state/calls.log"
+code="200"
 if [ -f "$state/deny" ]; then
   code="$(cat "$state/deny")"
-  echo "gh: Resource not accessible by integration (HTTP ${code})" >&2
-  exit 1
+  printf '%s\n' "{\"message\":\"Resource not accessible by integration\",\"status\":${code}}" > "$outfile"
+  printf '%s' "$code"
+  exit 0
 fi
 if [ "$method" = "GET" ]; then
-  jq -r "$jq_filter" "$comments"
+  cp "$comments" "$outfile"
+  printf '%s' "200"
   exit 0
 fi
 if [ "$method" = "POST" ]; then
-  body="$(jq -r '.body' "$input")"
+  body="$(jq -r '.body' "$datafile")"
   id="$(jq '[.[].id] | max // 0 | . + 1' "$comments")"
   html="https://github.com/example/repo/pull/7#issuecomment-${id}"
   jq --argjson id "$id" --arg body "$body" --arg html "$html" \
     '. + [{id: $id, body: $body, html_url: $html}]' "$comments" > "$comments.tmp"
   mv "$comments.tmp" "$comments"
-  jq -nr --arg html "$html" --argjson id "$id" '{id: $id, html_url: $html}' | jq -r "$jq_filter"
+  jq -n --argjson id "$id" --arg body "$body" --arg html "$html" \
+    '{id: $id, body: $body, html_url: $html}' > "$outfile"
+  printf '%s' "201"
   exit 0
 fi
 if [ "$method" = "PATCH" ]; then
-  id="${url##*/}"
-  body="$(jq -r '.body' "$input")"
+  id="${path##*/}"
+  body="$(jq -r '.body' "$datafile")"
   html="https://github.com/example/repo/pull/7#issuecomment-${id}"
   jq --argjson id "$id" --arg body "$body" --arg html "$html" \
     'map(if .id == $id then .body = $body | .html_url = $html else . end)' \
     "$comments" > "$comments.tmp"
   mv "$comments.tmp" "$comments"
-  jq -nr --arg html "$html" --argjson id "$id" '{id: $id, html_url: $html}' | jq -r "$jq_filter"
+  jq -n --argjson id "$id" --arg html "$html" '{id: $id, html_url: $html}' > "$outfile"
+  printf '%s' "200"
   exit 0
 fi
 if [ "$method" = "DELETE" ]; then
-  id="${url##*/}"
+  id="${path##*/}"
   jq --argjson id "$id" 'map(select(.id != $id))' "$comments" > "$comments.tmp"
   mv "$comments.tmp" "$comments"
+  : > "$outfile"
+  printf '%s' "204"
   exit 0
 fi
-echo "mock gh: unhandled method $method" >&2
-exit 1
+echo "mock curl: unhandled method $method" >&2
+printf '%s' "500"
+exit 0
 EOF
-  chmod +x "$state/bin/gh"
+  chmod +x "$state/bin/curl"
 }
 
 run_comment() {
@@ -152,7 +157,7 @@ else
   cat "$log" >&2
 fi
 count="$(jq 'length' "$state/comments.json")"
-posts="$(grep -c '^POST ' "$state/calls.log" || true)"
+posts="$(grep -c '^POST /repos/example/repo/issues/7/comments$' "$state/calls.log" || true)"
 if [ "$count" = "1" ] && [ "$posts" = "1" ] && grep -q 'url=https://github.com/example/repo/pull/7#issuecomment-1' "$out"; then
   ok "create posts one comment"
 else
@@ -173,8 +178,8 @@ else
   cat "$log" >&2
 fi
 count="$(jq 'length' "$state/comments.json")"
-posts="$(grep -c '^POST ' "$state/calls.log" || true)"
-patches="$(grep -c '^PATCH ' "$state/calls.log" || true)"
+posts="$(grep -c '^POST /repos/example/repo/issues/7/comments$' "$state/calls.log" || true)"
+patches="$(grep -c '^PATCH /repos/example/repo/issues/comments/1$' "$state/calls.log" || true)"
 body="$(jq -r '.[0].body' "$state/comments.json")"
 if [ "$count" = "1" ] && [ "$posts" = "1" ] && [ "$patches" = "1" ] && printf '%s\n' "$body" | grep -q '25%' && printf '%s\n' "$body" | grep -q 'report two'; then
   ok "re-run patches the same comment"
@@ -204,9 +209,9 @@ else
 fi
 marker_count="$(jq '[.[] | select(.body | startswith("<!-- conereplay-report -->"))] | length' "$state/comments.json")"
 human="$(jq '[.[] | select(.id == 11)] | length' "$state/comments.json")"
-deleted="$(grep -c '^DELETE repos/example/repo/issues/comments/12$' "$state/calls.log" || true)"
-patched="$(grep -c '^PATCH repos/example/repo/issues/comments/10$' "$state/calls.log" || true)"
-posted="$(grep -c '^POST ' "$state/calls.log" || true)"
+deleted="$(grep -c '^DELETE /repos/example/repo/issues/comments/12$' "$state/calls.log" || true)"
+patched="$(grep -c '^PATCH /repos/example/repo/issues/comments/10$' "$state/calls.log" || true)"
+posted="$(grep -c '^POST /repos/example/repo/issues/7/comments$' "$state/calls.log" || true)"
 if [ "$marker_count" = "1" ] && [ "$human" = "1" ] && [ "$deleted" = "1" ] && [ "$patched" = "1" ] && [ "$posted" = "0" ]; then
   ok "re-run keeps one report comment and the human comment"
 else
