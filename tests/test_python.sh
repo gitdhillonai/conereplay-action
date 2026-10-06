@@ -51,7 +51,7 @@ write_py "$bin_both/python3" "3.12"
 write_py "$bin_both/python3.11" "3.11"
 
 set +e
-out="$(CR_PYTHON_VERSION=3.11 PATH="$bin_old:/bin:/usr/bin" bash "$PICK" 2>"$workdir/old.err")"
+out="$(CR_PYTHON_VERSION=3.11 PATH="$bin_old:/usr/bin" /bin/bash "$PICK" 2>"$workdir/old.err")"
 rc=$?
 set -e
 if [ "$rc" -ne 0 ] && grep -q 'not on PATH' "$workdir/old.err"; then
@@ -62,7 +62,7 @@ else
 fi
 
 set +e
-out="$(CR_PYTHON_VERSION=3.11 PATH="$bin_both:/bin:/usr/bin" bash "$PICK" 2>"$workdir/both.err")"
+out="$(CR_PYTHON_VERSION=3.11 PATH="$bin_both:/usr/bin" /bin/bash "$PICK" 2>"$workdir/both.err")"
 rc=$?
 set -e
 if [ "$rc" -eq 0 ] && [ "$out" = "$bin_both/python3.11" ]; then
@@ -73,7 +73,7 @@ fi
 
 rm "$bin_both/python3.11"
 set +e
-out="$(CR_PYTHON_VERSION=3.11 PATH="$bin_both:/bin:/usr/bin" bash "$PICK" 2>"$workdir/fallback.err")"
+out="$(CR_PYTHON_VERSION=3.11 PATH="$bin_both:/usr/bin" /bin/bash "$PICK" 2>"$workdir/fallback.err")"
 rc=$?
 set -e
 if [ "$rc" -eq 0 ] && [ "$out" = "$bin_both/python3" ]; then
@@ -84,7 +84,7 @@ fi
 
 mkdir -p "$workdir/empty"
 set +e
-out="$(CR_PYTHON_VERSION=3.11 PATH="$workdir/empty:/bin:/usr/bin" bash "$PICK" 2>"$workdir/none.err")"
+out="$(CR_PYTHON_VERSION=3.11 PATH="$workdir/empty" /bin/bash "$PICK" 2>"$workdir/none.err")"
 rc=$?
 set -e
 if [ "$rc" -ne 0 ]; then
