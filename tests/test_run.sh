@@ -201,5 +201,21 @@ else
   cat "$workdir/real-glob/stderr" >&2
 fi
 
+rc="$(run_real "example/jsonl/refund-order-a.jsonl" "$workdir/real-jsonl")"
+if [ "$rc" = "0" ] && [ "$(output_value "$workdir/real-jsonl/output" rate)" = "100" ] && grep -q 'Outcome changed: \*\*yes\*\*' "$workdir/real-jsonl/report.md" && grep -q 'outcome-change rate 100%' "$workdir/real-jsonl/summary"; then
+  ok "published package replays a JSONL trace and writes the job summary"
+else
+  bad "real jsonl rc=$rc rate=$(output_value "$workdir/real-jsonl/output" rate)"
+  cat "$workdir/real-jsonl/stderr" >&2
+fi
+
+rc="$(run_real "example/jsonl" "$workdir/real-jsonl-dir")"
+if [ "$rc" = "0" ] && [ "$(output_value "$workdir/real-jsonl-dir/output" rate)" = "100.0" ] && grep -q 'Total traces: \*\*1\*\*' "$workdir/real-jsonl-dir/report.md"; then
+  ok "published package replays a directory of JSONL traces"
+else
+  bad "real jsonl dir rc=$rc rate=$(output_value "$workdir/real-jsonl-dir/output" rate)"
+  cat "$workdir/real-jsonl-dir/stderr" >&2
+fi
+
 echo "run: ${pass} passed, ${fail} failed"
 [ "$fail" -eq 0 ]

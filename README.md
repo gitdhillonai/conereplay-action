@@ -58,7 +58,7 @@ The action creates a virtualenv with the runner's Python and installs `conerepla
 
 ## Example
 
-`example/` holds three sanitized refund-workflow traces and a policy change (30-day to 5-day window). `examples/workflow.yml` is the workflow above. This repo's `self-test` workflow runs the script tests, then runs the action on a file, the directory, and the glob for every pull request and every push to `main`.
+`example/traces/` holds three sanitized refund-workflow JSON traces and `example/modify.json` changes the policy from 30 days to 5 days. `example/jsonl/refund-order-a.jsonl` is the same first trace as one JSON object per line, which is what `conereplay.Recorder` writes. `examples/workflow.yml` is the workflow above. This repo's `self-test` workflow runs the script tests, then runs the action on a file, the directory, the glob, and the JSONL trace. It also runs the directory on `ubuntu-latest`, and it expects `fail-on: outcome-change:5%` to fail on these fixtures because their outcome-change rate is 100%.
 
 ## Tests
 

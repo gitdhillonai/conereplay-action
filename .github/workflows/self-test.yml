@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Replay one trace file
+        id: file
         uses: ./
         with:
           traces: example/traces/refund-order-a.json
@@ -39,11 +40,99 @@ jobs:
           modify: example/modify.json
           fail-on: never
       - name: Replay a glob of traces
+        id: glob
         uses: ./
         with:
           traces: example/traces/*.json
           modify: example/modify.json
           fail-on: never
+      - name: Replay a JSONL trace
+        id: jsonl
+        uses: ./
+        with:
+          traces: example/jsonl/refund-order-a.jsonl
+          modify: example/modify.json
+          fail-on: never
+      - name: Recorded outputs match the fixture
+        shell: bash
+        env:
+          FILE_RATE: ${{ steps.file.outputs.outcome-change-rate }}
+          GLOB_RATE: ${{ steps.glob.outputs.outcome-change-rate }}
+          JSONL_RATE: ${{ steps.jsonl.outputs.outcome-change-rate }}
+          JSONL_REPORT: ${{ steps.jsonl.outputs.report }}
+        run: |
+          test "$FILE_RATE" = "100"
+          test "$GLOB_RATE" = "100.0"
+          test "$JSONL_RATE" = "100"
+          test "$JSONL_REPORT" = "conereplay-report.md"
+          test -f conereplay-report.md
+
+  threshold:
+    needs: tests
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Rate above 5% fails the check
+        id: over
+        continue-on-error: true
+        uses: ./
+        with:
+          traces: example/traces
+          modify: example/modify.json
+          fail-on: outcome-change:5%
+          comment: "false"
+      - name: Confirm the 5% threshold failed the step
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.over.outcome }}
+        run: |
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "expected outcome-change:5% to fail when the fixture rate is 100%"
+            echo "outcome=$OUTCOME"
+            exit 1
+          fi
+          echo "outcome-change:5% failed the check"
+      - name: Invalid fail-on fails the check
+        id: bad
+        continue-on-error: true
+        uses: ./
+        with:
+          traces: example/jsonl/refund-order-a.jsonl
+          modify: example/modify.json
+          fail-on: nope
+          comment: "false"
+      - name: Confirm an invalid fail-on failed the step
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.bad.outcome }}
+        run: |
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "expected fail-on 'nope' to fail the step"
+            echo "outcome=$OUTCOME"
+            exit 1
+          fi
+          echo "invalid fail-on failed the check"
+
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Replay the example directory on the documented runner
+        id: replay
+        uses: ./
+        with:
+          traces: example/traces
+          modify: example/modify.json
+          fail-on: never
+          comment: "false"
+      - name: Directory rate is 100.0
+        shell: bash
+        env:
+          RATE: ${{ steps.replay.outputs.outcome-change-rate }}
+        run: |
+          test "$RATE" = "100.0"
+          test -f conereplay-report.md
+          echo "ubuntu-latest replay rate=$RATE"
 
   fork-fallback:
     if: github.event_name == 'pull_request'
