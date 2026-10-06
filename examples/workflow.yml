@@ -1,0 +1,19 @@
+# Example workflow. Copy into .github/workflows/conereplay.yml.
+# Permissions: contents read for checkout, pull-requests write for the comment.
+# Fork pull requests do not receive a write token. The action logs that and
+# still writes the report to the job summary.
+name: conereplay
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: gitdhillonai/conereplay-action@v1
+        with:
+          traces: example/traces/*.json # file, directory, or glob
+          modify: example/modify.json
+          fail-on: outcome-change:5%

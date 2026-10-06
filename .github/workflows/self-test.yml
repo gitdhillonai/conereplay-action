@@ -1,18 +1,75 @@
 name: self-test
 on:
-  pull_request: {}
+  pull_request:
   push:
     branches: [main]
 permissions:
   contents: read
   pull-requests: write
 jobs:
-  corpus:
+  tests:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
-      - uses: ./
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install the published package used by the action
+        shell: bash
+        env:
+          CR_PYTHON_VERSION: "3.11"
+          CR_CONEREPLAY_VERSION: "0.1.2"
+        run: bash scripts/install.sh
+      - name: Run script tests
+        shell: bash
+        run: bash tests/run_all.sh
+
+  replay:
+    needs: tests
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Replay one trace file
+        uses: ./
+        with:
+          traces: example/traces/refund-order-a.json
+          modify: example/modify.json
+          fail-on: never
+      - name: Replay a directory of traces
+        uses: ./
         with:
           traces: example/traces
           modify: example/modify.json
           fail-on: never
+      - name: Replay a glob of traces
+        uses: ./
+        with:
+          traces: example/traces/*.json
+          modify: example/modify.json
+          fail-on: never
+
+  fork-fallback:
+    if: github.event_name == 'pull_request'
+    needs: replay
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Replay with a token that cannot write
+        id: action
+        uses: ./
+        with:
+          traces: example/traces/refund-order-a.json
+          modify: example/modify.json
+          fail-on: never
+          comment: "true"
+      - name: Comment URL stays empty without pull-requests write
+        shell: bash
+        env:
+          COMMENT_URL: ${{ steps.action.outputs.comment-url }}
+        run: |
+          if [ -n "$COMMENT_URL" ]; then
+            echo "expected no comment URL when the job token cannot write pull requests"
+            echo "comment-url=$COMMENT_URL"
+            exit 1
+          fi
+          echo "fork fallback left comment-url empty"
