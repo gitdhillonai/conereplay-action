@@ -7,6 +7,25 @@ permissions:
   contents: read
   pull-requests: write
 jobs:
+  lint:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: actionlint
+        shell: bash
+        run: |
+          bash scripts/install_actionlint.sh
+          .tools/actionlint
+      - name: shellcheck
+        shell: bash
+        run: |
+          bash scripts/install_shellcheck.sh
+          .tools/shellcheck scripts/*.sh tests/*.sh
+      - name: gitleaks
+        shell: bash
+        run: |
+          bash scripts/install_gitleaks.sh
+          .tools/gitleaks detect --source . --redact --exit-code 1
   tests:
     runs-on: self-hosted
     steps:

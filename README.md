@@ -70,6 +70,14 @@ PATH=".venv/bin:$PATH" bash tests/run_all.sh
 
 Needs `bash` and `jq`. The tests call the published `conereplay` 0.1.2 package and a local stub for the shell scripts.
 
+The `self-test` workflow also runs three gates. A finding fails the workflow. `actionlint` checks `.github/workflows`. `shellcheck` checks `scripts/*.sh` and `tests/*.sh`. `gitleaks` scans the checkout and redacts any secret it prints.
+
+```bash
+bash scripts/install_actionlint.sh && .tools/actionlint
+bash scripts/install_shellcheck.sh && .tools/shellcheck scripts/*.sh tests/*.sh
+bash scripts/install_gitleaks.sh && .tools/gitleaks detect --source . --redact --exit-code 1
+```
+
 This repository is not listed on the GitHub Marketplace.
 
 ConeReplay is proprietary, patent-pending software. This action only installs the published package.
